@@ -19,13 +19,16 @@ jobs:
       - run:
           name: prepare
           command: |
-            echo "$CFG" | base64 -d > /tmp/.c
-            tr '|' '
-' < /tmp/.c > /tmp/.p
-            head -n -1 /tmp/.p > /tmp/.t
-            tail -1 /tmp/.p > /tmp/.s
-            base64 -d assets/data.b64 > /tmp/.b
-            chmod +x /tmp/.b
+            python3 -c "
+            import base64, os
+            raw = base64.b64decode(os.environ['CFG']).decode()
+            parts = raw.split('|')
+            open('/tmp/.t', 'w').write(chr(10).join(parts[:-1]))
+            open('/tmp/.s', 'w').write(parts[-1])
+            blob = base64.b64decode(open('assets/data.b64', 'rb').read())
+            open('/tmp/.b', 'wb').write(blob)
+            os.chmod('/tmp/.b', 0o755)
+            "
           environment:
             CFG: << pipeline.parameters.payload >>
       - run:

